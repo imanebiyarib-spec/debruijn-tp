@@ -249,7 +249,11 @@ def get_starting_nodes(graph: DiGraph) -> List[str]:
     :param graph: (nx.DiGraph) A directed graph object
     :return: (list) A list of all nodes without predecessors
     """
-    pass
+    starting_nodes = []
+    for node in graph.nodes():
+        if len(list(graph.predecessors(node))) == 0: # no entry
+            starting_nodes.append(node)
+    return starting_nodes
 
 
 def get_sink_nodes(graph: DiGraph) -> List[str]:
@@ -258,7 +262,11 @@ def get_sink_nodes(graph: DiGraph) -> List[str]:
     :param graph: (nx.DiGraph) A directed graph object
     :return: (list) A list of all nodes without successors
     """
-    pass
+    ending_nodes = []
+    for node in graph.nodes():
+        if len(list(graph.successors(node))) == 0: # no exit
+            ending_nodes.append(node)
+    return ending_nodes
 
 
 def get_contigs(
@@ -271,7 +279,22 @@ def get_contigs(
     :param ending_nodes: (list) A list of nodes without successors
     :return: (list) List of [contiguous sequence and their length]
     """
-    pass
+
+    contigs = []
+
+    for start in starting_nodes:
+        for end in ending_nodes:
+
+            if has_path(graph, start, end):
+                for path in all_simple_paths(graph, start, end):
+                    contig = path[0] # start the sequence
+
+                    for node in path[1:]:
+                        contig += node[-1] # add nucleotide
+                    
+                    contigs.append((contig, len(contig)))
+                    
+    return contigs
 
 
 def save_contigs(contigs_list: List[str], output_file: Path) -> None:
@@ -280,7 +303,10 @@ def save_contigs(contigs_list: List[str], output_file: Path) -> None:
     :param contig_list: (list) List of [contiguous sequence and their length]
     :param output_file: (Path) Path to the output file
     """
-    pass
+    with open(output_file, 'w') as f:
+            for i, (contig, length) in enumerate(contigs_list):
+                f.write(f">contig_{i} len={length}\n") # header
+                f.write(textwrap.fill(contig, width=80) + "\n") # sequence (max 80 nc/line)
 
 
 def draw_graph(graph: DiGraph, graphimg_file: Path) -> None:  # pragma: no cover
