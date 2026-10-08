@@ -167,7 +167,14 @@ def remove_paths(
     :param delete_sink_node: (boolean) True->We remove the last node of a path
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    for path in path_list:
+            start_idx = 0 if delete_entry_node else 1
+            end_idx = None if delete_sink_node else -1
+            
+            nodes_to_remove = path[start_idx:end_idx]
+            graph.remove_nodes_from(nodes_to_remove)
+            
+    return graph
 
 
 def select_best_path(
@@ -188,7 +195,26 @@ def select_best_path(
     :param delete_sink_node: (boolean) True->We remove the last node of a path
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    best_idx = 0
+    
+    if len(path_list) > 1:
+        #  difference in average weights ?
+        if statistics.stdev(weight_avg_list) > 0:
+            best_idx = weight_avg_list.index(max(weight_avg_list))
+        # weights are identical,  difference in lengths?
+        elif statistics.stdev(path_length) > 0:
+            best_idx = path_length.index(max(path_length))
+        # everything is identical, pick randomly
+        else:
+            best_idx = randint(0, len(path_list) - 1)
+
+    # Filter out the best path 
+    paths_to_remove = [
+        path for i, path in enumerate(path_list) if i != best_idx
+    ]
+
+    # delete other paths
+    return remove_paths(graph, paths_to_remove, delete_entry_node, delete_sink_node)
 
 
 def path_average_weight(graph: DiGraph, path: List[str]) -> float:
@@ -211,7 +237,14 @@ def solve_bubble(graph: DiGraph, ancestor_node: str, descendant_node: str) -> Di
     :param descendant_node: (str) A downstream node in the graph
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+
+    paths = list(all_simple_paths(graph, ancestor_node, descendant_node))
+    lengths = [len(p) for p in paths]
+    weights = [path_average_weight(graph, p) for p in paths]
+
+    return select_best_path(
+        graph, paths, lengths, weights, delete_entry_node=False, delete_sink_node=False
+    )
 
 
 def simplify_bubbles(graph: DiGraph) -> DiGraph:
@@ -220,7 +253,35 @@ def simplify_bubbles(graph: DiGraph) -> DiGraph:
     :param graph: (nx.DiGraph) A directed graph object
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    bubble_found = False
+    ancestor = None
+    descendant = None
+
+    for node in list(graph.nodes()):
+        preds = list(graph.predecessors(node))
+        
+        if len(preds) > 1: # end of a bubble
+            for i in range(len(preds)):
+                for j in range(i + 1, len(preds)):
+                    anc = lowest_common_ancestor(graph, preds[i], preds[j])
+                    
+                    if anc is not None:
+                        bubble_found = True
+                        ancestor = anc
+                        descendant = node
+                        break # Exit inner loop
+                    
+                if bubble_found:
+                    break # Exit middle loop
+                
+        if bubble_found:
+            break # Exit outer loop
+
+    # bubble found, we solve it -->  changes the graph structure
+    if bubble_found:
+        graph = simplify_bubbles(solve_bubble(graph, ancestor, descendant))
+
+    return graph
 
 
 def solve_entry_tips(graph: DiGraph, starting_nodes: List[str]) -> DiGraph:
