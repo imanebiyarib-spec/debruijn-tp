@@ -29,6 +29,7 @@ from networkx import (
 import matplotlib
 from operator import itemgetter
 import random
+import networkx as nx
 
 random.seed(9001)
 from random import randint
@@ -39,13 +40,13 @@ from typing import Iterator, Dict, List
 
 matplotlib.use("Agg")
 
-__author__ = "Your Name"
-__copyright__ = "Universite Paris Diderot"
-__credits__ = ["Your Name"]
+__author__ = "Imane"
+__copyright__ = "Universite Paris Cité"
+__credits__ = ["Imane"]
 __license__ = "GPL"
 __version__ = "1.0.0"
-__maintainer__ = "Your Name"
-__email__ = "your@email.fr"
+__maintainer__ = "Imane"
+__email__ = "@email.fr"
 __status__ = "Developpement"
 
 
@@ -291,7 +292,38 @@ def solve_entry_tips(graph: DiGraph, starting_nodes: List[str]) -> DiGraph:
     :param starting_nodes: (list) A list of starting nodes
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    tip_found = False
+    convergence_node = None
+    involved_starts = []
+    
+    # Find a convergence node
+    for node in list(graph.nodes()):
+        if len(list(graph.predecessors(node))) > 1:
+            connected_starts = [s for s in starting_nodes if has_path(graph, s, node)]
+            if len(connected_starts) > 1:
+                tip_found = True
+                convergence_node = node
+                involved_starts = connected_starts
+                break
+                
+    # Resolve the detected tip
+    if tip_found:
+        paths = []
+        for start in involved_starts:
+            paths.extend(list(all_simple_paths(graph, start, convergence_node)))
+        
+        lengths = [len(p) for p in paths]
+        weights = [path_average_weight(graph, p) for p in paths]
+        
+        # Remove the entry node of the tip (True) but keep the convergence node (False)
+        graph = select_best_path(
+            graph, paths, lengths, weights, 
+            delete_entry_node=True, delete_sink_node=False
+        )
+        # Recursive call with updated starting nodes
+        graph = solve_entry_tips(graph, get_starting_nodes(graph))
+        
+    return graph
 
 
 def solve_out_tips(graph: DiGraph, ending_nodes: List[str]) -> DiGraph:
@@ -301,7 +333,38 @@ def solve_out_tips(graph: DiGraph, ending_nodes: List[str]) -> DiGraph:
     :param ending_nodes: (list) A list of ending nodes
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    tip_found = False
+    divergence_node = None
+    involved_ends = []
+    
+    # Find a divergence node
+    for node in list(graph.nodes()):
+        if len(list(graph.successors(node))) > 1:
+            connected_ends = [e for e in ending_nodes if has_path(graph, node, e)]
+            if len(connected_ends) > 1:
+                tip_found = True
+                divergence_node = node
+                involved_ends = connected_ends
+                break
+                
+    # Resolve the detected tip
+    if tip_found:
+        paths = []
+        for end in involved_ends:
+            paths.extend(list(all_simple_paths(graph, divergence_node, end)))
+            
+        lengths = [len(p) for p in paths]
+        weights = [path_average_weight(graph, p) for p in paths]
+        
+        graph = select_best_path(
+            graph, paths, lengths, weights, 
+            delete_entry_node=False, delete_sink_node=True
+        )
+
+        # updated sink nodes
+        graph = solve_out_tips(graph, get_sink_nodes(graph))
+        
+    return graph
 
 
 def get_starting_nodes(graph: DiGraph) -> List[str]:
@@ -404,12 +467,30 @@ def main() -> None:  # pragma: no cover
     # Get arguments
     args = get_arguments()
 
-    # Fonctions de dessin du graphe
-    # A decommenter si vous souhaitez visualiser un petit
-    # graphe
-    # Plot the graph
-    # if args.graphimg_file:
-    #     draw_graph(graph, args.graphimg_file)
+    # Read file and build graph
+    kmer_dict = build_kmer_dict(args.fastq_file, args.kmer_size)
+    graph = build_graph(kmer_dict)
+
+    # Resolve bubbles
+    graph = simplify_bubbles(graph)
+
+    # Resolve entry and out tips
+    start_nodes = get_starting_nodes(graph)
+    graph = solve_entry_tips(graph, start_nodes)
+
+    end_nodes = get_sink_nodes(graph)
+    graph = solve_out_tips(graph, end_nodes)
+
+    # Write contigs
+    final_start_nodes = get_starting_nodes(graph)
+    final_end_nodes = get_sink_nodes(graph)
+    
+    contigs = get_contigs(graph, final_start_nodes, final_end_nodes)
+    save_contigs(contigs, args.output_file)
+
+    #  draw the graph
+    if args.graphimg_file:
+        draw_graph(graph, args.graphimg_file)
 
 
 if __name__ == "__main__":  # pragma: no cover
